@@ -1,1 +1,235 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Reflex - Jeu de Rythme</title>
+    <style>
+        body {
+            background-color: #0b0e14;
+            color: white;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+        h1 {
+            color: #fec20c;
+            margin: 5px 0;
+            font-size: 24px;
+            text-shadow: 0 0 10px rgba(254, 194, 12, 0.5);
+        }
+        p {
+            color: #8b949e;
+            margin: 0 0 15px 0;
+            font-size: 14px;
+        }
+        canvas {
+            background-color: #111424;
+            border: 3px solid #fec20c;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+            cursor: crosshair;
+        }
+        .controls {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #57f287;
+        }
+    </style>
+</head>
+<body>
 
+    <h1>⚡ SPACE REFLEX ⚡</h1>
+    <p>Passe ta souris sur les capsules avant qu'elles ne touchent le bas !</p>
+
+    <canvas id="gameCanvas" width="500" height="500"></canvas>
+
+    <div class="controls">
+        🖱️ **Règle :** Déplace ta souris sur les pistes. Ne rate aucune capsule !
+    </div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let gameOver = false;
+    let score = 0;
+    let combo = 0;
+    let maxCombo = 0;
+    let lives = 3;
+    let gameIndex = 0;
+
+    // Configuration des 4 pistes (Lignes)
+    const numLanes = 4;
+    const laneWidth = canvas.width / numLanes;
+
+    // Liste des notes/capsules qui descendent
+    let notes = [];
+    let noteSpeed = 3.5;
+    let spawnInterval = 60; // Frames entre chaque apparition
+    let frameCount = 0;
+
+    // Position de la souris
+    let mouseX = 0;
+    let mouseY = 0;
+
+    canvas.addEventListener("mousemove", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+    });
+
+    function spawnNote() {
+        const randomLane = Math.floor(Math.random() * numLanes);
+        notes.push({
+            lane: randomLane,
+            y: -30,
+            radius: 18,
+            color: "#5865F2",
+            hit: false
+        });
+    }
+
+    function update() {
+        if (gameOver) return;
+
+        frameCount++;
+        // Accélération progressive du jeu
+        if (frameCount % 500 === 0) {
+            noteSpeed += 0.4;
+            spawnInterval = Math.max(25, spawnInterval - 4);
+        }
+
+        // Faire apparaître les notes
+        if (frameCount % spawnInterval === 0) {
+            spawnNote();
+        }
+
+        // Zone de validation (en bas de l'écran)
+        const hitZoneY = canvas.height - 60;
+        const hitZoneHeight = 40;
+
+        for (let i = notes.length - 1; i >= 0; i--) {
+            let n = notes[i];
+            n.y += noteSpeed;
+
+            // Calcul de la position X centrale de la note selon sa piste
+            let noteX = n.lane * laneWidth + laneWidth / 2;
+
+            // Vérification du passage de la souris (Collision au survol dans la zone)
+            if (!n.hit && n.y >= hitZoneY && n.y <= hitZoneY + hitZoneHeight) {
+                let currentMouseLane = Math.floor(mouseX / laneWidth);
+                
+                // Si la souris est sur la bonne piste et assez proche verticalement
+                if (currentMouseLane === n.lane && mouseY >= hitZoneY && mouseY <= hitZoneY + hitZoneHeight) {
+                    n.hit = true;
+                    n.color = "#57f287"; // Devient verte
+                    score += 10 + combo;
+                    combo++;
+                    if (combo > maxCombo) maxCombo = combo;
+                }
+            }
+
+            // Si la note dépasse le bas sans être touchée -> Perte d'une vie
+            if (n.y > canvas.height + 20) {
+                if (!n.hit) {
+                    lives--;
+                    combo = 0; // Reset du combo
+                    if (lives <= 0) {
+                        gameOver = true;
+                    }
+                }
+                notes.splice(i, 1);
+            }
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Dessiner les lignes des pistes
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+        ctx.lineWidth = 2;
+        for (let i = 1; i < numLanes; i++) {
+            ctx.beginPath();
+            ctx.moveTo(i * laneWidth, 0);
+            ctx.lineTo(i * laneWidth, canvas.height);
+            ctx.stroke();
+        }
+
+        // 2. Dessiner la zone de validation (La barre lumineuse en bas)
+        const hitZoneY = canvas.height - 60;
+        ctx.fillStyle = "rgba(254, 194, 12, 0.15)";
+        ctx.fillRect(0, hitZoneY, canvas.width, 40);
+        ctx.strokeStyle = "#fec20c";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(0, hitZoneY, canvas.width, 40);
+
+        // 3. Dessiner les notes (Capsules)
+        notes.forEach(n => {
+            let noteX = n.lane * laneWidth + laneWidth / 2;
+            
+            ctx.beginPath();
+            ctx.arc(noteX, n.y, n.radius, 0, Math.PI * 2);
+            ctx.fillStyle = n.color;
+            ctx.fill();
+            
+            // Reflet visière blanche pour le style stylé
+            ctx.beginPath();
+            ctx.arc(noteX + 5, n.y - 4, n.radius / 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+            ctx.fill();
+            ctx.closePath();
+        });
+
+        // 4. Interface (Score, Vies, Combo)
+        ctx.fillStyle = "white";
+        ctx.font = "bold 16px Arial";
+        ctx.textAlign = "left";
+        ctx.fillText(`Score: ${score}`, 20, 30);
+        ctx.fillText(`Combo: x${combo}`, 20, 55);
+
+        // Coeurs pour les vies
+        ctx.textAlign = "right";
+        let heartStr = "❤️".repeat(Math.max(0, lives));
+        ctx.fillText(lives > 0 ? heartStr : "💀", canvas.width - 20, 30);
+
+        // Écran Game Over
+        if (gameOver) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "#ed4245";
+            ctx.font = "bold 30px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("❌ RYTHME PERDU ! ❌", canvas.width / 2, canvas.height / 2 - 40);
+
+            ctx.fillStyle = "white";
+            ctx.font = "18px Arial";
+            ctx.fillText(`Score Final : ${score}`, canvas.width / 2, canvas.height / 2 + 10);
+            ctx.fillText(`Plus gros Combo : x${maxCombo}`, canvas.width / 2, canvas.height / 2 + 40);
+            
+            ctx.fillStyle = "#8b949e";
+            ctx.font = "14px Arial";
+            ctx.fillText("Appuie sur F5 pour relancer la musique", canvas.width / 2, canvas.height / 2 + 90);
+        }
+    }
+
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // Lancement du jeu
+    gameLoop();
+</script>
+
+</body>
+</html>
